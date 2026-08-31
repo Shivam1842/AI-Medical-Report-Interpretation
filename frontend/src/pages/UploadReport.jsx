@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, CloudUpload, FileText } from 'lucide-react';
+import { ArrowRight, CloudUpload, FileText, Eye, HardDrive, Lightbulb } from 'lucide-react';
 import { buildUploadPayload, formatFileSize, validateMedicalReportFile } from '../services/api';
 
 export default function UploadReport() {
@@ -130,11 +130,23 @@ export default function UploadReport() {
         </section>
 
         <aside className="tip-card">
-          <h3>Tips</h3>
+          <div className="tip-card__header">
+            <Lightbulb size={20} className="tip-card__icon" />
+            <h3>Pro Tips for Best Results</h3>
+          </div>
           <ul className="tip-list">
-            <li>Ensure the report is clear and readable.</li>
-            <li>Supported formats: PDF, JPG, PNG.</li>
-            <li>Maximum file size: 10MB.</li>
+            <li>
+              <Eye size={16} className="tip-list__icon" />
+              <span>Ensure the report is clear and readable.</span>
+            </li>
+            <li>
+              <FileText size={16} className="tip-list__icon" />
+              <span>Supported formats: PDF, JPG, PNG.</span>
+            </li>
+            <li>
+              <HardDrive size={16} className="tip-list__icon" />
+              <span>Maximum file size: 10MB.</span>
+            </li>
           </ul>
         </aside>
       </div>
