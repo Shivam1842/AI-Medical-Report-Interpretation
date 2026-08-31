@@ -1,8 +1,143 @@
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, CloudUpload, FileText } from 'lucide-react';
+import { buildUploadPayload, formatFileSize, validateMedicalReportFile } from '../services/api';
+
 export default function UploadReport() {
+  const navigate = useNavigate();
+  const inputRef = useRef(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [error, setError] = useState('');
+  const [dragging, setDragging] = useState(false);
+
+  const handleFileSelection = (file) => {
+    if (!file) {
+      return;
+    }
+
+    const validationError = validateMedicalReportFile(file);
+    if (validationError) {
+      setError(validationError);
+      setSelectedFile(null);
+      return;
+    }
+
+    const payload = buildUploadPayload(file);
+    setError('');
+    setSelectedFile({ ...file, apiPayload: payload });
+  };
+
+  const handleInputChange = (event) => {
+    const file = event.target.files?.[0];
+    handleFileSelection(file);
+  };
+
+  const handleAnalyze = () => {
+    if (!selectedFile) {
+      setError('Please upload a valid medical report before continuing.');
+      return;
+    }
+
+    const payload = buildUploadPayload(selectedFile);
+    if (!payload) {
+      setError('Please upload a valid medical report before continuing.');
+      return;
+    }
+
+    const uploadState = {
+      selectedFile: {
+        name: selectedFile.name,
+        size: selectedFile.size,
+        type: selectedFile.type,
+        apiPayload: payload,
+      },
+      uploadedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem('medai-upload-state', JSON.stringify(uploadState));
+    navigate('/processing');
+  };
+
+  const handleDrop = (event) => {
+    event.preventDefault();
+    setDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    handleFileSelection(file);
+  };
+
   return (
-    <div>
-      <h1>Upload Medical Report</h1>
-      <p>Please upload your medical report for AI interpretation.</p>
+    <div className="page">
+      <div className="upload-layout">
+        <section className="upload-panel">
+          <h1 className="upload-panel__title">Upload Medical Report</h1>
+          <p className="upload-panel__subtitle">
+            Upload your medical report and we&apos;ll analyze it for you.
+          </p>
+
+          <div
+            className={`upload-dropzone ${dragging ? 'upload-dropzone--dragging' : ''}`}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={handleDrop}
+          >
+            <div className="upload-dropzone__icon">
+              <CloudUpload size={40} />
+            </div>
+            <h3>Drag &amp; Drop your file here</h3>
+            <p>or</p>
+
+            <button
+              type="button"
+              className="btn btn--secondary upload-button"
+              onClick={() => inputRef.current?.click()}
+            >
+              Browse Files
+            </button>
+
+            <input
+              ref={inputRef}
+              type="file"
+              className="file-input"
+              accept=".pdf,.png,.jpg,.jpeg"
+              onChange={handleInputChange}
+              aria-label="Upload medical report"
+            />
+          </div>
+
+          <p className="supported-formats">Supported formats: PDF, JPG, PNG (Max 10MB)</p>
+
+          {selectedFile && (
+            <div className="file-meta" aria-live="polite">
+              <div className="file-meta__name">
+                <FileText size={16} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                {selectedFile.name}
+              </div>
+              <div className="file-meta__size">{formatFileSize(selectedFile.size)}</div>
+            </div>
+          )}
+
+          {error && <div className="validation-error">{error}</div>}
+
+          <div className="summary-actions">
+            <button type="button" className="btn btn--primary" onClick={handleAnalyze}>
+              Analyze Report
+              <ArrowRight size={18} />
+            </button>
+          </div>
+        </section>
+
+        <aside className="tip-card">
+          <h3>Tips</h3>
+          <ul className="tip-list">
+            <li>Ensure the report is clear and readable.</li>
+            <li>Supported formats: PDF, JPG, PNG.</li>
+            <li>Maximum file size: 10MB.</li>
+          </ul>
+        </aside>
+      </div>
     </div>
   );
 }
