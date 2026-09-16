@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CloudUpload, FileText, Eye, HardDrive, Lightbulb } from 'lucide-react';
-import { buildUploadPayload, formatFileSize, validateMedicalReportFile } from '../services/api';
+import { formatFileSize, validateMedicalReportFile } from '../services/api'; 
+// Note: buildUploadPayload was removed from imports since we use FormData now
 
 export default function UploadReport() {
   const navigate = useNavigate();
@@ -9,6 +10,7 @@ export default function UploadReport() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false); // Added upload state
 
   const handleFileSelection = (file) => {
     if (!file) {
@@ -22,9 +24,9 @@ export default function UploadReport() {
       return;
     }
 
-    const payload = buildUploadPayload(file);
     setError('');
-    setSelectedFile({ ...file, apiPayload: payload });
+    // We now store the pure, native File object so FormData can read it properly
+    setSelectedFile(file); 
   };
 
   const handleInputChange = (event) => {
@@ -32,30 +34,44 @@ export default function UploadReport() {
     handleFileSelection(file);
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!selectedFile) {
       setError('Please upload a valid medical report before continuing.');
       return;
     }
 
-    const payload = buildUploadPayload(selectedFile);
-    if (!payload) {
-      setError('Please upload a valid medical report before continuing.');
-      return;
-    }
-
-    const uploadState = {
-      selectedFile: {
-        name: selectedFile.name,
-        size: selectedFile.size,
-        type: selectedFile.type,
-        apiPayload: payload,
-      },
-      uploadedAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem('medai-upload-state', JSON.stringify(uploadState));
+    setIsUploading(true);
+    
+    // Send user to the loading screen immediately
     navigate('/processing');
+
+    // Prepare the file for the Python backend
+    const formData = new FormData();
+    formData.append("file", selectedFile); 
+
+    try {
+        // Send it to your FastAPI server
+        const response = await fetch("http://127.0.0.1:8000/api/analyze", {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error(`Upload failed with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Once the backend replies, automatically push them to the Results page 
+        // and pass the JSON data along with the route!
+        navigate('/results', { state: { reportData: data } });
+
+    } catch (error) {
+        console.error("Error during upload:", error);
+        alert("Failed to analyze report. Ensure your Python backend is running.");
+        setIsUploading(false);
+        navigate('/upload'); // Bring them back if it fails
+    }
   };
 
   const handleDrop = (event) => {
@@ -93,6 +109,7 @@ export default function UploadReport() {
               type="button"
               className="btn btn--secondary upload-button"
               onClick={() => inputRef.current?.click()}
+              disabled={isUploading}
             >
               Browse Files
             </button>
@@ -122,8 +139,13 @@ export default function UploadReport() {
           {error && <div className="validation-error">{error}</div>}
 
           <div className="summary-actions">
-            <button type="button" className="btn btn--primary" onClick={handleAnalyze}>
-              Analyze Report
+            <button 
+                type="button" 
+                className="btn btn--primary" 
+                onClick={handleAnalyze}
+                disabled={isUploading || !selectedFile}
+            >
+              {isUploading ? "Uploading..." : "Analyze Report"}
               <ArrowRight size={18} />
             </button>
           </div>
