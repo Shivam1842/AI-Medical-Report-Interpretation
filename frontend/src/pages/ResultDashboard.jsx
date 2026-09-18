@@ -1,6 +1,5 @@
 import { Eye } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Button from '../components/Button';
 import StatusBadge from '../components/StatusBadge';
 
 const getStatusVariant = (status) => {
@@ -44,9 +43,15 @@ export default function ResultDashboard() {
     <div className="page">
       <div className="summary-header">
         <h2>Report Summary</h2>
-        <Button to="/ai-explanation" variant="ghost">
+        {/* FIXED: Top button now passes reportData via router state */}
+        <button 
+          type="button" 
+          className="btn" 
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'inherit' }}
+          onClick={() => navigate('/ai-explanation', { state: { reportData } })}
+        >
           View AI Explanation
-        </Button>
+        </button>
       </div>
 
       <div className="summary-panel">
@@ -90,7 +95,6 @@ export default function ResultDashboard() {
                 <tr key={row.name}>
                   <td>{row.name}</td>
                   <td>{row.result}</td>
-                  {/* The visual fallbacks are added here */}
                   <td>{row.unit?.trim() || '-'}</td>
                   <td>{row.range?.trim() || '-'}</td>
                   <td>
