@@ -65,6 +65,9 @@ export default function UploadReport() {
 
         const data = await response.json();
         
+        // FIXED: Save the analysis to localStorage so it persists across refreshes or app reopens
+        localStorage.setItem('currentReport', JSON.stringify(data));
+        
         navigate('/results', { state: { reportData: data } });
 
     } catch (error) {

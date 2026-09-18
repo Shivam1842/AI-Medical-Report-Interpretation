@@ -16,7 +16,8 @@ export default function ResultDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  const reportData = location.state?.reportData;
+  // FIXED: Try getting data from router state first, fall back to localStorage if missing
+  const reportData = location.state?.reportData || JSON.parse(localStorage.getItem('currentReport'));
 
   if (!reportData) {
     return (
@@ -43,7 +44,6 @@ export default function ResultDashboard() {
     <div className="page">
       <div className="summary-header">
         <h2>Report Summary</h2>
-        {/* FIXED: Top button now passes reportData via router state */}
         <button 
           type="button" 
           className="btn" 
