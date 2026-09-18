@@ -2,7 +2,11 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CloudUpload, FileText, Eye, HardDrive, Lightbulb } from 'lucide-react';
 import { formatFileSize, validateMedicalReportFile } from '../services/api'; 
-// Note: buildUploadPayload was removed from imports since we use FormData now
+
+// Dynamic API base URL switching between local and live Render backend
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://127.0.0.1:8000' 
+  : 'https://ai-medical-report-interpretation.onrender.com';
 
 export default function UploadReport() {
   const navigate = useNavigate();
@@ -10,7 +14,7 @@ export default function UploadReport() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false); // Added upload state
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileSelection = (file) => {
     if (!file) {
@@ -25,7 +29,6 @@ export default function UploadReport() {
     }
 
     setError('');
-    // We now store the pure, native File object so FormData can read it properly
     setSelectedFile(file); 
   };
 
@@ -50,8 +53,8 @@ export default function UploadReport() {
     formData.append("file", selectedFile); 
 
     try {
-        // Send it to your FastAPI server
-        const response = await fetch("http://127.0.0.1:8000/api/analyze", {
+        // Send it to your FastAPI server (local or live Render backend)
+        const response = await fetch(`${API_BASE_URL}/api/analyze`, {
             method: "POST",
             body: formData,
         });
@@ -62,15 +65,13 @@ export default function UploadReport() {
 
         const data = await response.json();
         
-        // Once the backend replies, automatically push them to the Results page 
-        // and pass the JSON data along with the route!
         navigate('/results', { state: { reportData: data } });
 
     } catch (error) {
         console.error("Error during upload:", error);
-        alert("Failed to analyze report. Ensure your Python backend is running.");
+        alert("Failed to analyze report. Ensure your backend is running.");
         setIsUploading(false);
-        navigate('/upload'); // Bring them back if it fails
+        navigate('/upload'); 
     }
   };
 

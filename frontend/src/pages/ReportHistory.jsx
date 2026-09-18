@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+// Dynamic API base URL switching between local and live Render backend
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://127.0.0.1:8000' 
+  : 'https://ai-medical-report-interpretation.onrender.com';
+
 export default function ReportHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Fetch the data from the SQLite database via our FastAPI endpoint
+    // Fetch historical data from the SQLite database via FastAPI endpoint
     const fetchHistory = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/history');
+        const response = await fetch(`${API_BASE_URL}/api/history`);
         if (response.ok) {
           const data = await response.json();
           setHistory(data);
