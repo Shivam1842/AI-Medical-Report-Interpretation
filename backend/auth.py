@@ -19,18 +19,14 @@ security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    # Bcrypt has a 72-byte limit; encode to utf-8 and truncate if necessary
-    password_bytes = password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password_bytes = password_bytes[:72]
-    return pwd_context.hash(password_bytes.decode('utf-8', errors='ignore'))
+    # Hard truncate to 72 characters max to completely avoid bcrypt 72-byte/character limit crashes
+    safe_password = password[:72]
+    return pwd_context.hash(safe_password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    password_bytes = plain_password.encode('utf-8')
-    if len(password_bytes) > 72:
-        password_bytes = password_bytes[:72]
-    return pwd_context.verify(password_bytes.decode('utf-8', errors='ignore'), hashed_password)
+    safe_password = plain_password[:72]
+    return pwd_context.verify(safe_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
