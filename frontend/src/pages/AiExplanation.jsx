@@ -1,10 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import StatusBadge from '../components/StatusBadge';
+import { useTheme } from '../context/ThemeContext';
 
 export default function AiExplanation() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme } = useTheme();
   
   // Grab the data passed via the router from ResultDashboard
   const reportData = location.state?.reportData;
@@ -47,7 +49,12 @@ export default function AiExplanation() {
                 <h3 style={{ margin: 0 }}>{item.parameter}</h3>
                 <StatusBadge label={item.status} variant="high" />
               </div>
-              <p style={{ lineHeight: '1.6', margin: 0 }}>{item.explanation}</p>
+              <div className="explanation-details">
+                <p><strong style={{ color: '#f97316', marginRight: '0.35rem' }}>Meaning:</strong>{item.explanation}</p>
+                <p><strong style={{ color: '#ef4444', marginRight: '0.35rem' }}>Common Causes:</strong>{item.causes || 'Not available.'}</p>
+                <p><strong style={{ color: theme === 'dark' ? '#ffffff' : '#000000', marginRight: '0.35rem' }}>Precautions:</strong>{item.precautions || 'Not available.'}</p>
+                <p><strong style={{ color: '#22c55e', marginRight: '0.35rem' }}>Dietary Sources:</strong>{item.food_sources || 'Not available.'}</p>
+              </div>
             </div>
           ))}
         </div>

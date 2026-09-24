@@ -112,7 +112,7 @@ export default function ResultDashboard() {
         <div className="summary-actions">
           <button 
             type="button" 
-            className="btn btn--secondary" 
+            className="btn history-report-button" 
             onClick={() => navigate('/ai-explanation', { state: { reportData } })}
           >
             <Eye size={18} />

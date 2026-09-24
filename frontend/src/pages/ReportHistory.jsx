@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 // Dynamic API base URL switching between local and live Render backend
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -10,16 +11,23 @@ export default function ReportHistory() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const { token } = useAuth();
 
   useEffect(() => {
     // Fetch historical data from the SQLite database via FastAPI endpoint
     const fetchHistory = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/history`);
-        if (response.ok) {
-          const data = await response.json();
-          setHistory(data);
+        const response = await fetch(`${API_BASE_URL}/api/reports`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) {
+          throw new Error(`History request failed with status: ${response.status}`);
         }
+
+        const data = await response.json();
+        setHistory(data);
       } catch (error) {
         console.error("Failed to fetch history:", error);
       } finally {
@@ -28,7 +36,7 @@ export default function ReportHistory() {
     };
 
     fetchHistory();
-  }, []);
+  }, [token]);
 
   // Pass the historical JSON data back into the existing ResultDashboard
   const handleViewReport = (reportData) => {
@@ -56,16 +64,23 @@ export default function ReportHistory() {
       ) : (
         <div className="history-list">
           {history.map((record) => (
-            <div key={record.id} className="summary-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div key={record.id} className="summary-panel" style={{ marginBottom: '1rem' }}>
               <div>
-                <h3 style={{ margin: '0 0 0.5rem 0' }}>{record.report_name}</h3>
-                <p style={{ margin: 0, opacity: 0.7 }}>Report Date: {record.report_date}</p>
+                <h3 style={{ margin: '0 0 0.5rem 0' }}>
+                  {record.data?.report_info?.name || record.report_name || 'Medical Report'}
+                </h3>
+                <p style={{ margin: '0 0 0.5rem', opacity: 0.7 }}>
+                  Report Date: {record.report_date || record.data?.report_info?.date || 'Unknown'}
+                </p>
+                <p style={{ margin: '0 0 1rem', opacity: 0.7 }}>
+                  Abnormal Parameters: {record.data?.summary?.abnormal ?? 0}
+                </p>
               </div>
               <button 
-                className="btn btn--secondary"
+                className="btn history-report-button"
                 onClick={() => handleViewReport(record.data)}
               >
-                View Analysis
+                View Full Report
               </button>
             </div>
           ))}

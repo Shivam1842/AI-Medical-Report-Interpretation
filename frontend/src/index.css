@@ -1,12 +1,15 @@
 :root {
+  --bg-primary: #0b1220;
   --bg-color: #0b1220;
   --bg-elevated: #111c2e;
   --surface-color: #162235;
+  --card-bg: #162235;
   --surface-soft: rgba(56, 189, 248, 0.08);
   --surface-strong: rgba(56, 189, 248, 0.12);
   --primary-color: #38bdf8;
   --primary-strong: #22d3ee;
   --primary-soft: rgba(56, 189, 248, 0.15);
+  --text-primary: #f8fafc;
   --text-color: #f8fafc;
   --text-muted: #94a3b8;
   --text-inverse: #08111b;
@@ -21,14 +24,17 @@
 }
 
 :root[data-theme='light'] {
+  --bg-primary: #f8fafc;
   --bg-color: #f8fafc;
   --bg-elevated: #ffffff;
   --surface-color: #ffffff;
+  --card-bg: #ffffff;
   --surface-soft: rgba(37, 99, 235, 0.06);
   --surface-strong: rgba(37, 99, 235, 0.1);
   --primary-color: #2563eb;
   --primary-strong: #1d4ed8;
   --primary-soft: rgba(37, 99, 235, 0.12);
+  --text-primary: #0f172a;
   --text-color: #0f172a;
   --text-muted: #475569;
   --text-inverse: #ffffff;

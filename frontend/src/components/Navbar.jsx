@@ -19,11 +19,11 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="container navbar__inner">
-        <NavLink to="/" className="brand" aria-label="MedAI home">
+        <NavLink to="/" className="brand" aria-label="ReportMitra home">
           <span className="brand__icon">
             <Lightbulb size={18} />
           </span>
-          <span>MedAI</span>
+          <span>ReportMitra</span>
         </NavLink>
 
         <div className="navbar__right">

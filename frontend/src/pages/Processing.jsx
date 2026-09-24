@@ -1,26 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Check, Clock, Upload } from 'lucide-react';
 import { mockProcessingSteps } from '../data/mockData';
 
+const loadingMessages = [
+  'Extracting medical text...',
+  'Normalizing parameters...',
+  'Running AI medical analysis...',
+  'Finalizing report...',
+];
+
 export default function Processing() {
-  const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
+  const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setProgress((previous) => {
-        const next = Math.min(previous + 7, 100);
-        if (next >= 100) {
-          clearInterval(timer);
-          navigate('/results');
-        }
-        return next;
+        return Math.min(previous + 7, 92);
       });
     }, 220);
 
     return () => clearInterval(timer);
-  }, [navigate]);
+  }, []);
+
+  useEffect(() => {
+    const messageTimer = setInterval(() => {
+      setMessageIndex((previous) => (previous + 1) % loadingMessages.length);
+    }, 3000);
+
+    return () => clearInterval(messageTimer);
+  }, []);
 
   const progressStyle = useMemo(
     () => ({ '--progress-angle': `${(progress / 100) * 360}deg` }),
@@ -69,7 +78,7 @@ export default function Processing() {
           <span className="progress-ring__value">{progress}%</span>
         </div>
 
-        <p>Extracting text and analyzing data...</p>
+        <p aria-live="polite">{loadingMessages[messageIndex]}</p>
 
         <div className="info-box">
           <h3>Note</h3>

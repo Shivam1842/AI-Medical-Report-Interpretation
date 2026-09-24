@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CloudUpload, FileText, Eye, HardDrive, Lightbulb } from 'lucide-react';
 import { formatFileSize, validateMedicalReportFile } from '../services/api'; 
+import { useAuth } from '../context/AuthContext';
 
 // Dynamic API base URL switching between local and live Render backend
 const API_BASE_URL = window.location.hostname === 'localhost' 
@@ -10,6 +11,7 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 
 export default function UploadReport() {
   const navigate = useNavigate();
+  const { token } = useAuth();
   const inputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
@@ -56,6 +58,9 @@ export default function UploadReport() {
         // Send it to your FastAPI server (local or live Render backend)
         const response = await fetch(`${API_BASE_URL}/api/analyze`, {
             method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
             body: formData,
         });
 

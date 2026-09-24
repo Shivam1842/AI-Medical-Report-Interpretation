@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv, find_dotenv
 from google import genai
 from google.genai import types
+from fastapi import HTTPException
 from pydantic import BaseModel
 from typing import List
 import json
@@ -43,6 +44,9 @@ class AIExplanation(BaseModel):
     parameter: str
     status: str
     explanation: str
+    causes: str
+    precautions: str
+    food_sources: str
 
 class MedicalReportExtraction(BaseModel):
     report_info: ReportInfo
@@ -52,90 +56,68 @@ class MedicalReportExtraction(BaseModel):
 
 # 4. The function that actually talks to Gemini
 
+def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
+    models = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']
+
+    for model_name in models:
+        try:
+            return client.models.generate_content(
+                model=model_name,
+                contents=[
+                    prompt,
+                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type='application/json',
+                    response_schema=MedicalReportExtraction,
+                )
+            )
+        except Exception as error:
+            print(f"AI model {model_name} failed; trying the next fallback model: {error}")
+
+    raise HTTPException(
+        status_code=503,
+        detail="All AI analysis models are currently experiencing high traffic. Please try again later.",
+    )
 
 def parse_raw_text_to_json(raw_text: str) -> str:
-    lines = [line.strip() for line in raw_text.strip().replace('```', '').split('\n') if line.strip()]
-    
-    data = {
-        "report_info": {},
-        "summary": {},
-        "parameters": [],
-        "ai_explanations": []
-    }
-    
-    current_section = None
-    
-    # 1. Parse the text as usual
-    for line in lines:
-        if line in ["REPORT_INFO", "SUMMARY", "PARAMETERS", "EXPLANATIONS"]:
-            current_section = line
-            continue
-            
-        if line.startswith("Name|Date") or line.startswith("Total|Normal") or line.startswith("Name|Result") or line.startswith("Parameter|Status"):
-            continue
-            
-        parts = line.split('|')
-        
-        try:
-            if current_section == "REPORT_INFO" and len(parts) >= 2:
-                data["report_info"] = {"name": parts[0].strip(), "date": parts[1].strip()}
-            # Note: We completely ignore the AI's "SUMMARY" section now
-            elif current_section == "PARAMETERS" and len(parts) >= 5:
-                data["parameters"].append({
-                    "name": parts[0].strip(), "result": parts[1].strip(), "unit": parts[2].strip(), "range": parts[3].strip(), "status": parts[4].strip()
-                })
-            elif current_section == "EXPLANATIONS" and len(parts) >= 3:
-                data["ai_explanations"].append({
-                    "parameter": parts[0].strip(), "status": parts[1].strip(), "explanation": parts[2].strip()
-                })
-        except ValueError:
-            continue
-            
-    # 2. Programmatically calculate 100% accurate summary metrics
-    total_params = len(data["parameters"])
-    normal_count = sum(1 for p in data["parameters"] if p["status"].lower() == "normal")
-    borderline_count = sum(1 for p in data["parameters"] if p["status"].lower() == "borderline")
-    
-    # Everything else is considered abnormal (High, Low, Abnormal)
-    abnormal_count = total_params - normal_count - borderline_count
-    
-    data["summary"] = {
-        "total": total_params,
-        "normal": normal_count,
-        "abnormal": abnormal_count,
-        "borderline": borderline_count
-    }
-    
-    return json.dumps(data)
+    cleaned_text = raw_text.strip()
+    if cleaned_text.startswith('```'):
+        cleaned_text = cleaned_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+
+    data = json.loads(cleaned_text)
+    validated_data = MedicalReportExtraction.model_validate(data)
+    return validated_data.model_dump_json()
 
 def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
     prompt = """
-    Analyze the medical report and return the extracted data EXACTLY in the following plain text format, separated by pipes (|). 
-    Do not use markdown formatting, conversational words, or curly braces.
-    
-    REPORT_INFO
-    Name|Date
-    
-    SUMMARY
-    Total|Normal|Abnormal|Borderline
-    
-    PARAMETERS
-    Name|Result|Unit|Range|Status
-    
-    EXPLANATIONS
-    Parameter|Status|Explanation
+        Analyze the medical report and return ONLY valid JSON. Do not include markdown fences,
+        commentary, or any text outside the JSON object. Follow this exact schema:
+
+        {
+            "report_info": {"name": "string", "date": "string"},
+            "summary": {"total": 0, "normal": 0, "abnormal": 0, "borderline": 0},
+            "parameters": [
+                {"name": "string", "result": "string", "unit": "string", "range": "string", "status": "string"}
+            ],
+            "ai_explanations": [
+                {
+                    "parameter": "string",
+                    "status": "string",
+                    "explanation": "Brief overview of what the abnormal value means.",
+                    "causes": "Common medical or lifestyle causes.",
+                    "precautions": "Immediate steps or lifestyle changes to consider.",
+                    "food_sources": "Specific dietary recommendations to help correct the level."
+                }
+            ]
+        }
+
+        Include an ai_explanations entry for each abnormal or borderline parameter.
+        Use empty strings only when a field cannot be determined from the report.
+        Keep all JSON keys and string values valid JSON.
     """
     
-    response = client.models.generate_content(
-        model='gemini-3.5-flash-lite',
-        contents=[
-            prompt,
-            types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-        ],
-        config=types.GenerateContentConfig(
-            temperature=0.1
-            # Note: response_schema and response_mime_type have been removed for maximum speed
-        )
-    )
+    response = generate_content_with_retry(prompt, file_bytes, mime_type)
     
     return parse_raw_text_to_json(response.text)
