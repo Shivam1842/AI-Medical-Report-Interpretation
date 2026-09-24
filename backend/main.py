@@ -1,6 +1,10 @@
 import json
+import os
 import random
+import smtplib
 from datetime import datetime, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +25,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 def get_db():
     db = SessionLocal()
     try:
@@ -29,26 +32,51 @@ def get_db():
     finally:
         db.close()
 
-
 class OTPRequest(BaseModel):
     email: EmailStr
-
 
 class OTPVerifyRequest(BaseModel):
     email: EmailStr
     otp_code: str
-
 
 class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
 
-
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+# --- NEW: Email Sending Function ---
+def send_otp_email(recipient_email: str, otp_code: str):
+    sender_email = os.getenv("MAIL_USERNAME")
+    sender_password = os.getenv("MAIL_PASSWORD")
+
+    if not sender_email or not sender_password:
+        print("WARNING: Email credentials not set in Render Environment Variables. OTP printed to logs only.")
+        return
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = recipient_email
+        msg['Subject'] = "ReportMitra - Your Verification Code"
+
+        body = f"Hello,\n\nYour OTP code for ReportMitra is: {otp_code}\n\nThis code will expire in 5 minutes.\n\nThank you!"
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Connect to Gmail's SMTP server
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"Email sent successfully to {recipient_email}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+# -----------------------------------
 
 @app.post("/api/auth/send-otp")
 def send_otp(payload: OTPRequest, db: Session = Depends(get_db)):
@@ -64,10 +92,12 @@ def send_otp(payload: OTPRequest, db: Session = Depends(get_db)):
         db.add(OTP(email=email, otp_code=otp_code, expires_at=expires_at))
 
     db.commit()
-    print(f"OTP for {email}: {otp_code}")
+    print(f"Generated OTP for {email}: {otp_code}")
+
+    # Trigger the actual email send
+    send_otp_email(email, otp_code)
 
     return {"message": "OTP sent successfully", "email": email}
-
 
 @app.post("/api/auth/verify-otp")
 def verify_otp(payload: OTPVerifyRequest, db: Session = Depends(get_db)):
@@ -84,7 +114,6 @@ def verify_otp(payload: OTPVerifyRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="OTP expired.")
 
     return {"message": "OTP verified successfully", "email": email}
-
 
 @app.post("/api/auth/register")
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
@@ -106,7 +135,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     token = create_access_token({"sub": new_user.email})
     return {"message": "Registration successful", "token": token, "user": {"id": new_user.id, "name": new_user.name, "email": new_user.email}}
 
-
 @app.post("/api/auth/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     email = payload.email.lower().strip()
@@ -117,7 +145,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({"sub": user.email})
     return {"token": token, "user": {"id": user.id, "name": user.name, "email": user.email}}
-
 
 @app.post("/api/analyze")
 async def analyze_report(
@@ -165,7 +192,6 @@ async def analyze_report(
         print(f"Error processing document: {e}")
         raise HTTPException(status_code=500, detail="An error occurred while processing the report.")
 
-
 @app.get("/api/reports")
 def get_reports(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     records = db.query(ReportHistory).filter(ReportHistory.user_id == current_user.id).order_by(ReportHistory.id.desc()).all()
@@ -179,7 +205,6 @@ def get_reports(db: Session = Depends(get_db), current_user: User = Depends(get_
         }
         for record in records
     ]
-
 
 @app.get("/api/history")
 def get_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
