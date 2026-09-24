@@ -1,6 +1,10 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+// FIXED: Dynamic API base URL switching between local and live Render backend
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://127.0.0.1:8000' 
+  : 'https://ai-medical-report-interpretation.onrender.com';
+
 const AUTH_TOKEN_KEY = 'medai-auth-token';
 const USER_KEY = 'medai-auth-user';
 
