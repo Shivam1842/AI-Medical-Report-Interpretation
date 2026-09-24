@@ -1,10 +1,8 @@
 import json
 import os
 import random
-import smtplib
+import requests
 from datetime import datetime, timedelta
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,35 +46,42 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-# --- NEW: Email Sending Function ---
+# --- UPDATED: Resend HTTP Email Function ---
 def send_otp_email(recipient_email: str, otp_code: str):
-    sender_email = os.getenv("MAIL_USERNAME")
-    sender_password = os.getenv("MAIL_PASSWORD")
+    resend_api_key = os.getenv("RESEND_API_KEY")
 
-    if not sender_email or not sender_password:
-        print("WARNING: Email credentials not set in Render Environment Variables. OTP printed to logs only.")
+    if not resend_api_key:
+        print("WARNING: RESEND_API_KEY not set in Render Environment Variables. OTP printed to logs only.")
         return
 
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {resend_api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "from": "onboarding@resend.dev",
+        "to": [recipient_email],
+        "subject": "ReportMitra - Your Verification Code",
+        "html": f"""
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+                <h2>Welcome to ReportMitra</h2>
+                <p>Your verification code is:</p>
+                <h1 style="color: #2563eb; letter-spacing: 2px;">{otp_code}</h1>
+                <p>This code will expire in 5 minutes.</p>
+            </div>
+        """
+    }
+
     try:
-        msg = MIMEMultipart()
-        msg['From'] = sender_email
-        msg['To'] = recipient_email
-        msg['Subject'] = "ReportMitra - Your Verification Code"
-
-        body = f"Hello,\n\nYour OTP code for ReportMitra is: {otp_code}\n\nThis code will expire in 5 minutes.\n\nThank you!"
-        msg.attach(MIMEText(body, 'plain'))
-
-        # Connect to Gmail's SMTP server
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        
-        print(f"Email sent successfully to {recipient_email}")
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code == 200:
+            print(f"Email sent successfully to {recipient_email} via Resend")
+        else:
+            print(f"Failed to send email via Resend: {response.text}")
     except Exception as e:
-        print(f"Failed to send email: {e}")
-# -----------------------------------
+        print(f"Resend error: {e}")
+# -------------------------------------------
 
 @app.post("/api/auth/send-otp")
 def send_otp(payload: OTPRequest, db: Session = Depends(get_db)):
@@ -94,7 +99,7 @@ def send_otp(payload: OTPRequest, db: Session = Depends(get_db)):
     db.commit()
     print(f"Generated OTP for {email}: {otp_code}")
 
-    # Trigger the actual email send
+    # Trigger the Resend email send
     send_otp_email(email, otp_code)
 
     return {"message": "OTP sent successfully", "email": email}
