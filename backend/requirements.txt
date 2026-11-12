@@ -11,3 +11,5 @@ psycopg2-binary
 python-jose[cryptography]
 requests
 bcrypt
+psycopg2-binary
+psycopg-binary
