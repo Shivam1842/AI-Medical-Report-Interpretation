@@ -4,10 +4,8 @@ import { ArrowRight, CloudUpload, FileText, Eye, HardDrive, Lightbulb } from 'lu
 import { formatFileSize, validateMedicalReportFile } from '../services/api'; 
 import { useAuth } from '../context/AuthContext';
 
-// Dynamic API base URL switching between local and live Render backend
-const API_BASE_URL = window.location.hostname === 'https://ai-medical-report-interpretation.onrender.com' 
-  ? 'http://127.0.0.1:8000' 
-  : 'https://ai-medical-report-interpretation.onrender.com';
+// Direct live Render backend URL
+const API_BASE_URL = 'https://ai-medical-report-interpretation.onrender.com';
 
 export default function UploadReport() {
   const navigate = useNavigate();
@@ -46,20 +44,16 @@ export default function UploadReport() {
     }
 
     setIsUploading(true);
-    
-    // Send user to the loading screen immediately
     navigate('/processing');
 
-    // Prepare the file for the Python backend
     const formData = new FormData();
     formData.append("file", selectedFile); 
 
     try {
-        // Send it to your FastAPI server (local or live Render backend)
         const response = await fetch(`${API_BASE_URL}/api/analyze`, {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${token}`,
+              ...(token ? { Authorization: `Bearer ${token}` } : {})
             },
             body: formData,
         });
@@ -69,10 +63,7 @@ export default function UploadReport() {
         }
 
         const data = await response.json();
-        
-        // FIXED: Save the analysis to localStorage so it persists across refreshes or app reopens
         localStorage.setItem('currentReport', JSON.stringify(data));
-        
         navigate('/results', { state: { reportData: data } });
 
     } catch (error) {

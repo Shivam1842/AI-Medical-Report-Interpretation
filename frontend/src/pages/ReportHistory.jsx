@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-// Dynamic API base URL switching between local and live Render backend
-const API_BASE_URL = window.location.hostname === 'https://ai-medical-report-interpretation.onrender.com' 
-  ? 'http://127.0.0.1:8000' 
-  : 'https://ai-medical-report-interpretation.onrender.com';
+// Direct live Render backend URL
+const API_BASE_URL = 'https://ai-medical-report-interpretation.onrender.com';
 
 export default function ReportHistory() {
   const [history, setHistory] = useState([]);
@@ -14,12 +12,12 @@ export default function ReportHistory() {
   const { token } = useAuth();
 
   useEffect(() => {
-    // Fetch historical data from the SQLite database via FastAPI endpoint
+    // Fetch historical data from the SQLite database via live FastAPI endpoint
     const fetchHistory = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/reports`, {
           headers: {
-            Authorization: `Bearer ${token}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
           },
         });
         if (!response.ok) {
@@ -62,8 +60,7 @@ export default function ReportHistory() {
           </button>
         </div>
       ) : (
-        <div className="history-list">
-          {history.map((record) => (
+        (history || []).map((record) => (
             <div key={record.id} className="summary-panel" style={{ marginBottom: '1rem' }}>
               <div>
                 <h3 style={{ margin: '0 0 0.5rem 0' }}>
@@ -83,8 +80,7 @@ export default function ReportHistory() {
                 View Full Report
               </button>
             </div>
-          ))}
-        </div>
+          ))
       )}
     </div>
   );
