@@ -53,9 +53,9 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-# 4. The function that talks to Gemini with fast retry logic to prevent timeouts
+# 4. The function that talks to Gemini using the correct active model
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    models = ['gemini-1.5-flash', 'gemini-2.0-flash']
+    models = ['gemini-2.5-flash', 'gemini-1.5-flash']
 
     for model_name in models:
         try:
@@ -73,7 +73,7 @@ def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
             )
         except Exception as error:
             print(f"Model {model_name} failed, trying next: {error}")
-            time.sleep(0.5)  # Fast gap to stay well within timeout limits
+            time.sleep(0.5)
 
     raise HTTPException(
         status_code=503,
