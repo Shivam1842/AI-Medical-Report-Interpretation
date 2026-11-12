@@ -53,27 +53,33 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-# 4. The function that talks to Gemini using the recommended gemini-3.8-flash model
+# 4. True Multi-Model Fallback Loop
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    try:
-        return client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=[
-                prompt,
-                types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-            ],
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                response_mime_type='application/json',
-                response_schema=MedicalReportExtraction,
+    models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash']
+
+    for model_name in models:
+        try:
+            print(f"Attempting analysis with model: {model_name}")
+            return client.models.generate_content(
+                model=model_name,
+                contents=[
+                    prompt,
+                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                ],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type='application/json',
+                    response_schema=MedicalReportExtraction,
+                )
             )
-        )
-    except Exception as error:
-        print(f"Gemini API error: {error}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"AI model error: {str(error)}",
-        )
+        except Exception as error:
+            print(f"Model {model_name} failed with error: {error}. Trying next model...")
+            time.sleep(0.5)
+
+    raise HTTPException(
+        status_code=503,
+        detail="All Gemini AI models are currently experiencing high traffic. Please try again in a moment.",
+    )
 
 def parse_raw_text_to_json(raw_text: str) -> str:
     cleaned_text = raw_text.strip()
