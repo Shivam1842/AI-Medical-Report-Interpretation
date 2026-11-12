@@ -53,32 +53,27 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-# 4. The function that talks to Gemini using the correct active model
+# 4. The function that talks to Gemini using the active gemini-2.5-flash model
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    models = ['gemini-2.5-flash', 'gemini-1.5-flash']
-
-    for model_name in models:
-        try:
-            return client.models.generate_content(
-                model=model_name,
-                contents=[
-                    prompt,
-                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    response_mime_type='application/json',
-                    response_schema=MedicalReportExtraction,
-                )
+    try:
+        return client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                response_mime_type='application/json',
+                response_schema=MedicalReportExtraction,
             )
-        except Exception as error:
-            print(f"Model {model_name} failed, trying next: {error}")
-            time.sleep(0.5)
-
-    raise HTTPException(
-        status_code=503,
-        detail="All AI analysis models are currently experiencing high traffic. Please try again later.",
-    )
+        )
+    except Exception as error:
+        print(f"Gemini API error: {error}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI model error: {str(error)}",
+        )
 
 def parse_raw_text_to_json(raw_text: str) -> str:
     cleaned_text = raw_text.strip()
