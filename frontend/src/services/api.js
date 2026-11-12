@@ -1,8 +1,8 @@
 export const API_CONFIG = {
-  baseUrl: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeoutMs: 30000,
+  baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://ai-medical-report-interpretation.onrender.com/api',
+  timeoutMs: 60000, // 60 seconds taaki AI processing ke waqt timeout na ho
   appName: 'ReportMitra',
-  mockMode: true,
+  mockMode: false,
 };
 
 export const MAX_REPORT_FILE_SIZE = 10 * 1024 * 1024;
@@ -58,6 +58,38 @@ export function validateMedicalReportFile(file, maxSize = MAX_REPORT_FILE_SIZE) 
   }
 
   return '';
+}
+
+// Real API integration to communicate with the live FastAPI backend
+export async function analyzeMedicalReport(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeoutMs);
+
+  try {
+    const response = await fetch(`${API_CONFIG.baseUrl}/analyze`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Server error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out while analyzing the report. Please try again.');
+    }
+    throw error;
+  }
 }
 
 export async function fetchMockReportResult() {

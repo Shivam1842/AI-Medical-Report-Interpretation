@@ -1,4 +1,5 @@
 import os
+import time
 from dotenv import load_dotenv, find_dotenv
 from google import genai
 from google.genai import types
@@ -52,27 +53,29 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-# 4. The function that actually talks to Gemini
+# 4. The function that talks to Gemini with optimized retry and stable model priority
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    # UPDATED: Replaced non-existent 3.5/3.8 with actual Google Gemini models
-    models = ['gemini-2.0-flash', 'gemini-1.5-flash']
+    # gemini-1.5-flash is prioritized for better free tier stability, with gemini-2.0-flash as fallback
+    models = ['gemini-1.5-flash', 'gemini-2.0-flash']
 
     for model_name in models:
-        try:
-            return client.models.generate_content(
-                model=model_name,
-                contents=[
-                    prompt,
-                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    response_mime_type='application/json',
-                    response_schema=MedicalReportExtraction,
+        for attempt in range(3):  # Har model ke liye 3 baar try karega
+            try:
+                return client.models.generate_content(
+                    model=model_name,
+                    contents=[
+                        prompt,
+                        types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
+                    ],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        response_mime_type='application/json',
+                        response_schema=MedicalReportExtraction,
+                    )
                 )
-            )
-        except Exception as error:
-            print(f"AI model {model_name} failed; trying the next fallback model: {error}")
+            except Exception as error:
+                print(f"Model {model_name} attempt {attempt+1} failed: {error}")
+                time.sleep(2)  # 2 seconds ka gap taaki rate limit clear ho jaye
 
     raise HTTPException(
         status_code=503,
