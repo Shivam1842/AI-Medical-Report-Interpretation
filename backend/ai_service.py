@@ -8,20 +8,16 @@ from pydantic import BaseModel
 from typing import List
 import json
 
-# 1. Force Python to aggressively find and load the .env file
 env_path = find_dotenv()
 load_dotenv(env_path)
 
-# 2. Grab the key
 api_key = os.environ.get("GEMINI_API_KEY")
 
-# 3. Add a debug check to tell us EXACTLY what is going wrong
 if not api_key:
     raise ValueError(f"CRITICAL ERROR: Still cannot find the API key. Python looked for the .env file here: {env_path}")
 
 client = genai.Client(api_key=api_key)
 
-# 3. Define the exact JSON structure your React app expects
 class ReportInfo(BaseModel):
     name: str
     date: str
@@ -53,15 +49,13 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-# 4. True Multi-Model Fallback Loop
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-3.8-flash']
-
-    for model_name in models:
+    # gemini-3.8-flash is the correct active model; retry with backoff for 503 high demand
+    for attempt in range(3):
         try:
-            print(f"Attempting analysis with model: {model_name}")
+            print(f"Attempting analysis with gemini-3.8-flash (Attempt {attempt+1})")
             return client.models.generate_content(
-                model=model_name,
+                model='gemini-3.8-flash',
                 contents=[
                     prompt,
                     types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
@@ -73,13 +67,14 @@ def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
                 )
             )
         except Exception as error:
-            print(f"Model {model_name} failed with error: {error}. Trying next model...")
-            time.sleep(0.5)
-
-    raise HTTPException(
-        status_code=503,
-        detail="All Gemini AI models are currently experiencing high traffic. Please try again in a moment.",
-    )
+            print(f"Attempt {attempt+1} failed: {error}")
+            if attempt < 2:
+                time.sleep(2)  # Wait 2 seconds before retrying on high demand
+            else:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Gemini AI is experiencing high traffic. Please try again in a moment.",
+                )
 
 def parse_raw_text_to_json(raw_text: str) -> str:
     cleaned_text = raw_text.strip()
@@ -119,5 +114,4 @@ def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
     """
     
     response = generate_content_with_retry(prompt, file_bytes, mime_type)
-    
     return parse_raw_text_to_json(response.text)
