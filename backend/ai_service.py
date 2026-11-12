@@ -20,8 +20,6 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
-# ... (keep all your class definitions starting with class ReportInfo(BaseModel): below this)
-
 # 3. Define the exact JSON structure your React app expects
 class ReportInfo(BaseModel):
     name: str
@@ -55,9 +53,9 @@ class MedicalReportExtraction(BaseModel):
     ai_explanations: List[AIExplanation]
 
 # 4. The function that actually talks to Gemini
-
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    models = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']
+    # UPDATED: Replaced non-existent 3.5/3.8 with actual Google Gemini models
+    models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
 
     for model_name in models:
         try:
