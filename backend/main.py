@@ -10,8 +10,7 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from ai_service import process_document_with_ai
-from auth import create_access_token, get_current_user, hash_password, verify_password
-from database import OTP, ReportHistory, SessionLocal, User
+from database import ReportHistory, SessionLocal
 
 app = FastAPI(title="ReportMitra Core Engine")
 
@@ -30,132 +29,10 @@ def get_db():
     finally:
         db.close()
 
-class OTPRequest(BaseModel):
-    email: EmailStr
-
-class OTPVerifyRequest(BaseModel):
-    email: EmailStr
-    otp_code: str
-
-class RegisterRequest(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-# --- UPDATED: Resend HTTP Email Function ---
-def send_otp_email(recipient_email: str, otp_code: str):
-    resend_api_key = os.getenv("RESEND_API_KEY")
-
-    if not resend_api_key:
-        print("WARNING: RESEND_API_KEY not set in Render Environment Variables. OTP printed to logs only.")
-        return
-
-    url = "https://api.resend.com/emails"
-    headers = {
-        "Authorization": f"Bearer {resend_api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "from": "onboarding@resend.dev",
-        "to": [recipient_email],
-        "subject": "ReportMitra - Your Verification Code",
-        "html": f"""
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2>Welcome to ReportMitra</h2>
-                <p>Your verification code is:</p>
-                <h1 style="color: #2563eb; letter-spacing: 2px;">{otp_code}</h1>
-                <p>This code will expire in 5 minutes.</p>
-            </div>
-        """
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        if response.status_code == 200:
-            print(f"Email sent successfully to {recipient_email} via Resend")
-        else:
-            print(f"Failed to send email via Resend: {response.text}")
-    except Exception as e:
-        print(f"Resend error: {e}")
-# -------------------------------------------
-
-@app.post("/api/auth/send-otp")
-def send_otp(payload: OTPRequest, db: Session = Depends(get_db)):
-    email = payload.email.lower().strip()
-    otp_code = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=5)
-
-    existing_otp = db.query(OTP).filter(OTP.email == email).first()
-    if existing_otp:
-        existing_otp.otp_code = otp_code
-        existing_otp.expires_at = expires_at
-    else:
-        db.add(OTP(email=email, otp_code=otp_code, expires_at=expires_at))
-
-    db.commit()
-    print(f"Generated OTP for {email}: {otp_code}")
-
-    # Trigger the Resend email send
-    send_otp_email(email, otp_code)
-
-    return {"message": "OTP sent successfully", "email": email}
-
-@app.post("/api/auth/verify-otp")
-def verify_otp(payload: OTPVerifyRequest, db: Session = Depends(get_db)):
-    email = payload.email.lower().strip()
-    otp_record = db.query(OTP).filter(OTP.email == email).order_by(OTP.id.desc()).first()
-
-    if not otp_record:
-        raise HTTPException(status_code=400, detail="No OTP found for this email.")
-
-    if otp_record.otp_code != payload.otp_code:
-        raise HTTPException(status_code=400, detail="Invalid OTP.")
-
-    if otp_record.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="OTP expired.")
-
-    return {"message": "OTP verified successfully", "email": email}
-
-@app.post("/api/auth/register")
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    email = payload.email.lower().strip()
-
-    if db.query(User).filter(User.email == email).first():
-        raise HTTPException(status_code=400, detail="User already exists.")
-
-    new_user = User(
-        name=payload.name,
-        email=email,
-        password_hash=hash_password(payload.password),
-        is_verified=True,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    token = create_access_token({"sub": new_user.email})
-    return {"message": "Registration successful", "token": token, "user": {"id": new_user.id, "name": new_user.name, "email": new_user.email}}
-
-@app.post("/api/auth/login")
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    email = payload.email.lower().strip()
-    user = db.query(User).filter(User.email == email).first()
-
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password.")
-
-    token = create_access_token({"sub": user.email})
-    return {"token": token, "user": {"id": user.id, "name": user.name, "email": user.email}}
-
 @app.post("/api/analyze")
 async def analyze_report(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ):
     if not file.filename.lower().endswith(('.pdf', '.jpg', '.jpeg', '.png')):
         raise HTTPException(status_code=400, detail="Invalid file format.")
@@ -184,7 +61,7 @@ async def analyze_report(
             report_name=report_name,
             report_date=report_date,
             raw_json_data=raw_json_string,
-            user_id=current_user.id,
+            user_id=None,  # No authentication / public access
         )
         db.add(new_record)
         db.commit()
@@ -198,8 +75,8 @@ async def analyze_report(
         raise HTTPException(status_code=500, detail="An error occurred while processing the report.")
 
 @app.get("/api/reports")
-def get_reports(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    records = db.query(ReportHistory).filter(ReportHistory.user_id == current_user.id).order_by(ReportHistory.id.desc()).all()
+def get_reports(db: Session = Depends(get_db)):
+    records = db.query(ReportHistory).order_by(ReportHistory.id.desc()).all()
 
     return [
         {
@@ -212,5 +89,5 @@ def get_reports(db: Session = Depends(get_db), current_user: User = Depends(get_
     ]
 
 @app.get("/api/history")
-def get_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return get_reports(db, current_user)
+def get_history(db: Session = Depends(get_db)):
+    return get_reports(db)
