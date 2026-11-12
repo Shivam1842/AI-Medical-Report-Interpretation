@@ -7,9 +7,7 @@ python-multipart
 python-dotenv
 passlib[bcrypt]
 email-validator
-psycopg2-binary
 python-jose[cryptography]
 requests
 bcrypt
-psycopg2-binary
-psycopg-binary
+psycopg[binary]
