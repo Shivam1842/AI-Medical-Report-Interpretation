@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // Dynamic API base URL switching between local and live Render backend
-const API_BASE_URL = window.location.hostname === 'localhost' 
+const API_BASE_URL = window.location.hostname === 'https://ai-medical-report-interpretation.onrender.com' 
   ? 'http://127.0.0.1:8000' 
   : 'https://ai-medical-report-interpretation.onrender.com';
 
