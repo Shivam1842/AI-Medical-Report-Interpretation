@@ -53,11 +53,11 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-# 4. The function that talks to Gemini using the active gemini-2.5-flash model
+# 4. The function that talks to Gemini using the recommended gemini-3.8-flash model
 def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
     try:
         return client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.8-flash',
             contents=[
                 prompt,
                 types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
