@@ -4,9 +4,6 @@ import { ArrowRight, CloudUpload, FileText, Eye, HardDrive, Lightbulb } from 'lu
 import { formatFileSize, validateMedicalReportFile } from '../services/api'; 
 import { useAuth } from '../context/AuthContext';
 
-// Direct live Render backend URL
-const API_BASE_URL = 'https://ai-medical-report-interpretation.onrender.com';
-
 export default function UploadReport() {
   const navigate = useNavigate();
   const { token } = useAuth();
@@ -14,7 +11,6 @@ export default function UploadReport() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileSelection = (file) => {
     if (!file) {
@@ -37,41 +33,14 @@ export default function UploadReport() {
     handleFileSelection(file);
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = () => {
     if (!selectedFile) {
       setError('Please upload a valid medical report before continuing.');
       return;
     }
 
-    setIsUploading(true);
-    navigate('/processing');
-
-    const formData = new FormData();
-    formData.append("file", selectedFile); 
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/api/analyze`, {
-            method: "POST",
-            headers: {
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            },
-            body: formData,
-        });
-
-        if (!response.ok) {
-            throw new Error(`Upload failed with status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        localStorage.setItem('currentReport', JSON.stringify(data));
-        navigate('/results', { state: { reportData: data } });
-
-    } catch (error) {
-        console.error("Error during upload:", error);
-        alert("Failed to analyze report. Ensure your backend is running.");
-        setIsUploading(false);
-        navigate('/upload'); 
-    }
+    // Pass the selected file safely to the processing page via router state
+    navigate('/processing', { state: { file: selectedFile } });
   };
 
   const handleDrop = (event) => {
@@ -87,7 +56,7 @@ export default function UploadReport() {
         <section className="upload-panel">
           <h1 className="upload-panel__title">Upload Medical Report</h1>
           <p className="upload-panel__subtitle">
-            Upload your medical report and we&apos;ll analyze it for you.
+            Upload your medical report and we&apos;ll analyze it for type-safe processing.
           </p>
 
           <div
@@ -109,7 +78,6 @@ export default function UploadReport() {
               type="button"
               className="btn btn--secondary upload-button"
               onClick={() => inputRef.current?.click()}
-              disabled={isUploading}
             >
               Browse Files
             </button>
@@ -143,9 +111,9 @@ export default function UploadReport() {
                 type="button" 
                 className="btn btn--primary" 
                 onClick={handleAnalyze}
-                disabled={isUploading || !selectedFile}
+                disabled={!selectedFile}
             >
-              {isUploading ? "Uploading..." : "Analyze Report"}
+              Analyze Report
               <ArrowRight size={18} />
             </button>
           </div>
