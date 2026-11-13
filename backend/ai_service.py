@@ -70,29 +70,39 @@ def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
         Include an ai_explanations entry for each abnormal or borderline parameter. Return pure JSON only without markdown code blocks.
     """
 
-    try:
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                prompt,
-                types.Part.from_bytes(
-                    data=file_bytes,
-                    mime_type=mime_type,
-                )
-            ]
-        )
+    # List of models to try sequentially if one fails or is decommissioned
+    models_to_try = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
+    last_error = None
 
-        raw_text = response.text.strip()
-        if raw_text.startswith('```'):
-            raw_text = raw_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+    for model_name in models_to_try:
+        try:
+            print(f"Attempting analysis with model: {model_name}")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[
+                    prompt,
+                    types.Part.from_bytes(
+                        data=file_bytes,
+                        mime_type=mime_type,
+                    )
+                ]
+            )
 
-        data = json.loads(raw_text)
-        validated_data = MedicalReportExtraction.model_validate(data)
-        return validated_data.model_dump_json()
+            raw_text = response.text.strip()
+            if raw_text.startswith('```'):
+                raw_text = raw_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
 
-    except Exception as error:
-        print(f"Gemini API error: {error}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Gemini AI error: {str(error)}",
-        )
+            data = json.loads(raw_text)
+            validated_data = MedicalReportExtraction.model_validate(data)
+            return validated_data.model_dump_json()
+
+        except Exception as error:
+            print(f"Model {model_name} failed: {error}")
+            last_error = error
+            continue  # Automatically switches to the next model in the list
+
+    # If all models in the list fail, raise exception
+    raise HTTPException(
+        status_code=503,
+        detail=f"All fallback models failed. Last error: {str(last_error)}",
+    )
