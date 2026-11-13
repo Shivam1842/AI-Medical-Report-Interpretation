@@ -75,7 +75,7 @@ def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
 
     try:
         completion = client.chat.completions.create(
-            model="meta-llama/llama-3.2-11b-vision-instruct",
+            model="llama-3.2-90b-vision-preview",
             messages=[
                 {
                     "role": "user",
