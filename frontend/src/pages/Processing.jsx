@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Check, Clock, Upload } from 'lucide-react';
 import { mockProcessingSteps } from '../data/mockData';
 
@@ -10,19 +11,15 @@ const loadingMessages = [
 ];
 
 export default function Processing() {
-  const [progress, setProgress] = useState(0);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const file = location.state?.file;
+
+  const [progress, setProgress] = useState(10);
   const [messageIndex, setMessageIndex] = useState(0);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setProgress((previous) => {
-        return Math.min(previous + 7, 92);
-      });
-    }, 220);
-
-    return () => clearInterval(timer);
-  }, []);
-
+  // Loading messages loop
   useEffect(() => {
     const messageTimer = setInterval(() => {
       setMessageIndex((previous) => (previous + 1) % loadingMessages.length);
@@ -31,10 +28,73 @@ export default function Processing() {
     return () => clearInterval(messageTimer);
   }, []);
 
-  const progressStyle = useMemo(
-    () => ({ '--progress-angle': `${(progress / 100) * 360}deg` }),
-    [progress],
-  );
+  // Actual API call and progress handling
+  useEffect(() => {
+    if (!file) {
+      setError('No file found. Please upload again.');
+      return;
+    }
+
+    const uploadAndAnalyze = async () => {
+      try {
+        // Increment progress gradually while waiting
+        const progressInterval = setInterval(() => {
+          setProgress((prev) => (prev < 90 ? prev + 10 : prev));
+        }, 1500);
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Replace with your actual backend URL if hosted live, or relative path if using proxy
+        const response = await fetch('https://ai-medical-report-interpretation.onrender.com/api/analyze', {
+          method: 'POST',
+          body: formData,
+        });
+
+        clearInterval(progressInterval);
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || 'Failed to analyze report.');
+        }
+
+        const reportData = await response.json();
+        
+        setProgress(100);
+
+        // Save to localStorage as fallback and navigate to Result Dashboard
+        localStorage.setItem('currentReport', JSON.stringify(reportData));
+        
+        setTimeout(() => {
+          navigate('/result', { state: { reportData } });
+        }, 500);
+
+      } catch (err) {
+        console.error('Analysis error:', err);
+        setError(err.message);
+      }
+    };
+
+    uploadAndAnalyze();
+  }, [file, navigate]);
+
+  const progressStyle = {
+    '--progress-angle': `${(progress / 100) * 360}deg`,
+  };
+
+  if (error) {
+    return (
+      <div className="page process-card-wrap">
+        <section className="processing-card" style={{ textAlign: 'center' }}>
+          <h2 style={{ color: '#ef4444' }}>Analysis Failed</h2>
+          <p>{error}</p>
+          <button className="btn btn--primary" onClick={() => navigate('/upload')} style={{ marginTop: '1.5rem' }}>
+            Try Again
+          </button>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="page process-card-wrap">
