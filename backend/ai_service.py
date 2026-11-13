@@ -1,7 +1,6 @@
 import os
-import base64
+import google.generativeai as genai
 from dotenv import load_dotenv, find_dotenv
-from groq import Groq
 from fastapi import HTTPException
 from pydantic import BaseModel
 from typing import List
@@ -9,12 +8,12 @@ import json
 
 load_dotenv(find_dotenv())
 
-groq_api_key = os.environ.get("GROQ_API_KEY")
+gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
-if not groq_api_key:
-    raise ValueError("CRITICAL ERROR: Groq API key not found in environment variables.")
+if not gemini_api_key:
+    raise ValueError("CRITICAL ERROR: GEMINI_API_KEY not found in environment variables.")
 
-client = Groq(api_key=groq_api_key)
+genai.configure(api_key=gemini_api_key)
 
 class ReportInfo(BaseModel):
     name: str
@@ -48,9 +47,6 @@ class MedicalReportExtraction(BaseModel):
     ai_explanations: List[AIExplanation]
 
 def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
-    base64_image = base64.b64encode(file_bytes).decode('utf-8')
-    data_url = f"data:{mime_type};base64,{base64_image}"
-
     prompt = """
         Analyze the medical report image and return ONLY valid JSON matching this exact schema:
         {
@@ -74,33 +70,28 @@ def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
     """
 
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.2-90b-vision-preview",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": data_url}}
-                    ],
-                }
-            ],
-            temperature=0.1,
-            response_format={"type": "json_object"}
-        )
+        # Using Google Gemini flash model for lightning-fast free vision extraction
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        response = model.generate_content([
+            prompt,
+            {
+                "mime_type": mime_type,
+                "data": file_bytes
+            }
+        ])
 
-        raw_text = completion.choices[0].message.content
-        cleaned_text = raw_text.strip()
-        if cleaned_text.startswith('```'):
-            cleaned_text = cleaned_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+        raw_text = response.text.strip()
+        if raw_text.startswith('```'):
+            raw_text = raw_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
 
-        data = json.loads(cleaned_text)
+        data = json.loads(raw_text)
         validated_data = MedicalReportExtraction.model_validate(data)
         return validated_data.model_dump_json()
 
     except Exception as error:
-        print(f"Groq API error: {error}")
+        print(f"Gemini API error: {error}")
         raise HTTPException(
             status_code=503,
-            detail=f"Groq AI error: {str(error)}",
+            detail=f"Gemini AI error: {str(error)}",
         )
