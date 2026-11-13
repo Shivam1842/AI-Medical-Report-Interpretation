@@ -1,22 +1,20 @@
 import os
-import time
+import base64
 from dotenv import load_dotenv, find_dotenv
-from google import genai
-from google.genai import types
+from groq import Groq
 from fastapi import HTTPException
 from pydantic import BaseModel
 from typing import List
 import json
 
-env_path = find_dotenv()
-load_dotenv(env_path)
+load_dotenv(find_dotenv())
 
-api_key = os.environ.get("GEMINI_API_KEY")
+groq_api_key = os.environ.get("GROQ_API_KEY")
 
-if not api_key:
-    raise ValueError(f"CRITICAL ERROR: Still cannot find the API key. Python looked for the .env file here: {env_path}")
+if not groq_api_key:
+    raise ValueError("CRITICAL ERROR: Groq API key not found in environment variables.")
 
-client = genai.Client(api_key=api_key)
+client = Groq(api_key=groq_api_key)
 
 class ReportInfo(BaseModel):
     name: str
@@ -49,47 +47,12 @@ class MedicalReportExtraction(BaseModel):
     parameters: List[Parameter]
     ai_explanations: List[AIExplanation]
 
-def generate_content_with_retry(prompt: str, file_bytes: bytes, mime_type: str):
-    # gemini-3.8-flash is the correct active model; retry with backoff for 503 high demand
-    for attempt in range(3):
-        try:
-            print(f"Attempting analysis with gemini-3.8-flash (Attempt {attempt+1})")
-            return client.models.generate_content(
-                model='gemini-3.8-flash',
-                contents=[
-                    prompt,
-                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type)
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,
-                    response_mime_type='application/json',
-                    response_schema=MedicalReportExtraction,
-                )
-            )
-        except Exception as error:
-            print(f"Attempt {attempt+1} failed: {error}")
-            if attempt < 2:
-                time.sleep(2)  # Wait 2 seconds before retrying on high demand
-            else:
-                raise HTTPException(
-                    status_code=503,
-                    detail="Gemini AI is experiencing high traffic. Please try again in a moment.",
-                )
-
-def parse_raw_text_to_json(raw_text: str) -> str:
-    cleaned_text = raw_text.strip()
-    if cleaned_text.startswith('```'):
-        cleaned_text = cleaned_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-
-    data = json.loads(cleaned_text)
-    validated_data = MedicalReportExtraction.model_validate(data)
-    return validated_data.model_dump_json()
-
 def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
-    prompt = """
-        Analyze the medical report and return ONLY valid JSON. Do not include markdown fences,
-        commentary, or any text outside the JSON object. Follow this exact schema:
+    base64_image = base64.b64encode(file_bytes).decode('utf-8')
+    data_url = f"data:{mime_type};base64,{base64_image}"
 
+    prompt = """
+        Analyze the medical report image and return ONLY valid JSON matching this exact schema:
         {
             "report_info": {"name": "string", "date": "string"},
             "summary": {"total": 0, "normal": 0, "abnormal": 0, "borderline": 0},
@@ -107,11 +70,37 @@ def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
                 }
             ]
         }
-
-        Include an ai_explanations entry for each abnormal or borderline parameter.
-        Use empty strings only when a field cannot be determined from the report.
-        Keep all JSON keys and string values valid JSON.
+        Include an ai_explanations entry for each abnormal or borderline parameter. Return pure JSON only without markdown code blocks.
     """
-    
-    response = generate_content_with_retry(prompt, file_bytes, mime_type)
-    return parse_raw_text_to_json(response.text)
+
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.2-11b-vision-preview",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}}
+                    ],
+                }
+            ],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
+
+        raw_text = completion.choices[0].message.content
+        cleaned_text = raw_text.strip()
+        if cleaned_text.startswith('```'):
+            cleaned_text = cleaned_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
+
+        data = json.loads(cleaned_text)
+        validated_data = MedicalReportExtraction.model_validate(data)
+        return validated_data.model_dump_json()
+
+    except Exception as error:
+        print(f"Groq API error: {error}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Groq AI error: {str(error)}",
+        )
