@@ -1,5 +1,6 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv, find_dotenv
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -13,7 +14,7 @@ gemini_api_key = os.environ.get("GEMINI_API_KEY")
 if not gemini_api_key:
     raise ValueError("CRITICAL ERROR: GEMINI_API_KEY not found in environment variables.")
 
-genai.configure(api_key=gemini_api_key)
+client = genai.Client(api_key=gemini_api_key)
 
 class ReportInfo(BaseModel):
     name: str
@@ -70,16 +71,16 @@ def process_document_with_ai(file_bytes: bytes, mime_type: str) -> str:
     """
 
     try:
-        # Using Google Gemini flash model for lightning-fast free vision extraction
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        
-        response = model.generate_content([
-            prompt,
-            {
-                "mime_type": mime_type,
-                "data": file_bytes
-            }
-        ])
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                prompt,
+                types.Part.from_bytes(
+                    data=file_bytes,
+                    mime_type=mime_type,
+                )
+            ]
+        )
 
         raw_text = response.text.strip()
         if raw_text.startswith('```'):
