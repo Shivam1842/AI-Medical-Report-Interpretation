@@ -9,5 +9,4 @@ passlib[bcrypt]
 email-validator
 python-jose[cryptography]
 requests
-bcrypt
 psycopg[binary]
