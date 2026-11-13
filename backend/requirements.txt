@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-groq
+google-generativeai
 sqlalchemy
 pydantic
 python-multipart
