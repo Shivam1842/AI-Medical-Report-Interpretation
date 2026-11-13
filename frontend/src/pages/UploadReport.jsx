@@ -13,9 +13,7 @@ export default function UploadReport() {
   const [dragging, setDragging] = useState(false);
 
   const handleFileSelection = (file) => {
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     const validationError = validateMedicalReportFile(file);
     if (validationError) {
@@ -39,7 +37,7 @@ export default function UploadReport() {
       return;
     }
 
-    // Pass the selected file safely to the processing page via router state
+    // Safely pass the file to the processing page via router state
     navigate('/processing', { state: { file: selectedFile } });
   };
 
@@ -56,7 +54,7 @@ export default function UploadReport() {
         <section className="upload-panel">
           <h1 className="upload-panel__title">Upload Medical Report</h1>
           <p className="upload-panel__subtitle">
-            Upload your medical report and we&apos;ll analyze it for type-safe processing.
+            Upload your medical report and we&apos;ll analyze it for you.
           </p>
 
           <div
